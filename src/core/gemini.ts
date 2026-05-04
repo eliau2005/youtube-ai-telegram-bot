@@ -1,6 +1,6 @@
 import { GoogleGenerativeAI, type GenerativeModel } from '@google/generative-ai';
 import { config } from '../config';
-import { buildCategorizePrompt } from './prompts/categorize';
+import { buildFullPlaylistPrompt } from './prompts/categorize';
 import { buildSlugPrompt } from './prompts/slug';
 import { buildConsultSystemPrompt, buildExtractInstructionsPrompt } from './prompts/consult';
 import type {
@@ -10,6 +10,7 @@ import type {
   UserConstraints,
   Video
 } from './types';
+import type { ExistingTaxonomy } from './strapi-options';
 import { delay, waitWithAbortChecks } from '../util/delay';
 
 const genAI = new GoogleGenerativeAI(config.geminiApiKey);
@@ -21,7 +22,12 @@ function getJsonModel(): GenerativeModel {
   if (jsonModel) return jsonModel;
   jsonModel = genAI.getGenerativeModel({
     model: config.geminiModel,
-    generationConfig: { responseMimeType: 'application/json' }
+    generationConfig: {
+      responseMimeType: 'application/json',
+      // Bumped from default 8K because we now ask for the full playlist in
+      // one call. 132 lessons × ~80 tokens output ≈ 10K — give plenty of room.
+      maxOutputTokens: 65536
+    }
   });
   return jsonModel;
 }
@@ -32,14 +38,21 @@ function getPlainModel(): GenerativeModel {
   return plainModel;
 }
 
-export async function categorizeChunk(
-  chunk: Video[],
-  constraints: UserConstraints,
+/**
+ * Single-call autonomous categorization: send ALL videos to Gemini in one
+ * request together with the existing CMS taxonomy as context. The AI decides
+ * sub-categories / lesson-groups itself (preferring reuse of existing ones)
+ * and returns the full structured result.
+ */
+export async function categorizeFullPlaylist(
+  videos: Video[],
+  mainCategory: string,
   customInstructions: CustomInstructions | null,
+  existing: ExistingTaxonomy,
   log: (text: string) => void,
   isAborted: () => boolean
 ): Promise<AiResultItem[] | null> {
-  const prompt = buildCategorizePrompt(constraints, customInstructions, chunk);
+  const prompt = buildFullPlaylistPrompt(mainCategory, customInstructions, existing, videos);
   const model = getJsonModel();
   let attempt = 0;
   // eslint-disable-next-line no-constant-condition
@@ -48,12 +61,20 @@ export async function categorizeChunk(
     try {
       const result = await model.generateContent(prompt);
       const text = result.response.text();
-      return JSON.parse(text) as AiResultItem[];
+      const parsed = JSON.parse(text) as AiResultItem[];
+      if (!Array.isArray(parsed)) {
+        throw new Error('AI response is not a JSON array');
+      }
+      return parsed;
     } catch (err) {
       attempt++;
       const waitSeconds = Math.min(5 * Math.pow(2, attempt - 1), 60);
       const message = err instanceof Error ? err.message : String(err);
       log(`Gemini error (attempt ${attempt}): ${message}`);
+      if (attempt >= 5) {
+        log('Giving up after 5 attempts.');
+        throw err;
+      }
       log(`Retrying in ${waitSeconds}s...`);
       const aborted = await waitWithAbortChecks(waitSeconds * 1000, isAborted);
       if (aborted) return null;

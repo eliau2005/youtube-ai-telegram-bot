@@ -20,21 +20,18 @@ export interface CustomInstructions {
   freeText: string;
 }
 
-export type AiStatus = 'MATCH' | 'OUT_OF_SCOPE' | 'NEW_SUBCATEGORY_NEEDED';
-
 export interface AiResultItem {
   videoId: string;
-  status: AiStatus;
   lessonTitle: string;
-  category: string;
   subCategory: string;
   lessonGroup: string | null;
   rabbi: string;
   baseSlug: string;
-  suggestedSubCategory?: string;
-  suggestedLessonGroup?: string | null;
   simanValue: number | null;
   simanSectionValue: number | null;
+  isNewSubCategory?: boolean;
+  isNewLessonGroup?: boolean;
+  isNewRabbi?: boolean;
 }
 
 export interface ApprovedVideo {

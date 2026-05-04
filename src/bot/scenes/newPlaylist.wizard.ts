@@ -59,48 +59,28 @@ export const newPlaylistWizard = new Scenes.WizardScene<BotContext>(
     return ctx.wizard.next();
   },
 
-  // Step 1 — receive main category
+  // Step 1 — receive main category, then offer pre-chat. The AI now decides
+  // sub-categories / lesson-groups / rabbis on its own based on the pre-chat
+  // and the existing CMS taxonomy, so we don't ask the user for them.
   async (ctx) => {
     if (!('text' in (ctx.message ?? {}))) return;
-    getState(ctx).category = (ctx.message as { text: string }).text.trim();
-    await ctx.reply('תתי-קטגוריות מותרות, מופרדות בפסיקים. (לדוגמה: סוכה, פסח, חנוכה)');
-    return ctx.wizard.next();
-  },
-
-  // Step 2 — receive sub-categories
-  async (ctx) => {
-    if (!('text' in (ctx.message ?? {}))) return;
-    getState(ctx).subCategories = (ctx.message as { text: string }).text.trim();
+    const state = getState(ctx);
+    state.category = (ctx.message as { text: string }).text.trim();
+    state.subCategories = '';
+    state.lessonGroups = '';
+    state.rabbis = '';
     await ctx.reply(
-      'קבוצות שיעור (אופציונלי) — מופרדות בפסיקים. אם אין, שלח /skip.'
-    );
-    return ctx.wizard.next();
-  },
-
-  // Step 3 — receive lesson groups (or /skip)
-  async (ctx) => {
-    if (!('text' in (ctx.message ?? {}))) return;
-    const text = (ctx.message as { text: string }).text.trim();
-    getState(ctx).lessonGroups = text === '/skip' ? '' : text;
-    await ctx.reply('רבנים בפלייליסט — מופרדים בפסיקים. (לדוגמה: ר׳ דוד כהן, ר׳ משה טוב)');
-    return ctx.wizard.next();
-  },
-
-  // Step 4 — receive rabbis, then offer pre-chat
-  async (ctx) => {
-    if (!('text' in (ctx.message ?? {}))) return;
-    getState(ctx).rabbis = (ctx.message as { text: string }).text.trim();
-    await ctx.reply(
-      'האם תרצה לשתף עם ה-AI הנחיות מיוחדות לסדרה הזו? (לדוגמה: פלייליסט פרשת שבוע ללא סימנים, סדר לפי חומשים)',
+      'מצוין. עכשיו ה-AI ינתח את הפלייליסט בקריאה אחת וישתמש ב-Strapi הקיים כתבנית.\n\n' +
+        'מומלץ לשוחח איתו קצרות לפני הריצה כדי לתאר את אופי הסדרה (פרשת שבוע? לפי סימנים? סדר מיוחד?).',
       buildPreChatStartKeyboard()
     );
     return ctx.wizard.next();
   },
 
-  // Step 5 — placeholder; handled by action handlers (pre:*, run:*) and the
-  // scene-level .on('text') handler below for pre-chat / dialogs / per-item edit.
+  // Step 2 — placeholder; handled by action handlers (pre:*, run:*) and the
+  // scene-level .on('text') handler below for pre-chat / per-item edit.
   // CRITICAL: must call next() so that global handlers registered on the bot
-  // (cor:*, fld:*, aiq:*) can fire while the user is still in the scene.
+  // (cor:*, fld:*) can fire while the user is still in the scene.
   async (_ctx, next) => {
     return next();
   }
@@ -295,14 +275,18 @@ async function sendConfirmation(ctx: BotContext): Promise<void> {
     '📋 *סיכום הגדרות*',
     `• פלייליסט: \`${state.playlistId}\``,
     `• קטגוריה ראשית: ${state.category}`,
-    `• תת-קטגוריות: ${state.subCategories}`,
-    `• קבוצות: ${state.lessonGroups || '(אין)'}`,
-    `• רבנים: ${state.rabbis}`
+    '• תתי-קטגוריות, קבוצות ורבנים — יוחלטו על ידי ה-AI לפי הטקסונומיה הקיימת ב-Strapi וההנחיות שנתת'
   ];
   if (ci) {
-    lines.push(`• הנחיות: ${ci.summary || '(אין סיכום)'}`);
-    lines.push(`  סימנים: ${ci.hasSimanim ? 'כן' : 'לא'}`);
-    if (ci.sortBy) lines.push(`  מיון: ${ci.sortBy}`);
+    lines.push('');
+    lines.push('🧠 *הנחיות AI מותאמות:*');
+    if (ci.summary) lines.push(`  • ${ci.summary}`);
+    lines.push(`  • סימנים: ${ci.hasSimanim ? 'כן' : 'לא'}`);
+    if (ci.sortBy) lines.push(`  • מיון: ${ci.sortBy}`);
+    if (ci.customSubCategoryRules) lines.push(`  • כללי תתי-קטגוריה: ${ci.customSubCategoryRules}`);
+  } else {
+    lines.push('');
+    lines.push('🧠 *הנחיות AI:* ברירת מחדל (לא נבחרו הנחיות מיוחדות)');
   }
   await ctx.reply(lines.join('\n'), {
     parse_mode: 'Markdown',
