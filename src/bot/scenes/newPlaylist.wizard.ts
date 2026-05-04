@@ -132,9 +132,17 @@ newPlaylistWizard.action('pre:start', async (ctx) => {
     await ctx.reply(opener);
     await ctx.reply('כתוב תשובה. כשתסיים, לחץ על הכפתור.', buildPreChatFinishKeyboard());
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
     logger.error({ err }, 'pre-chat opener failed');
-    await ctx.reply('❌ Gemini לא זמין כעת. אפשר לדלג ולהמשיך.');
-    await ctx.reply('הקש /skip כדי להמשיך בלי הנחיות חופשיות.');
+    await ctx.reply(
+      `❌ Gemini החזיר שגיאה:\n\`${message.slice(0, 400)}\`\n\n` +
+        'בדיקות שאפשר לעשות:\n' +
+        '• ודא ש-`GEMINI_MODEL` ב-`.env` הוא שם תקף (לדוגמה `gemini-2.5-flash-lite-preview` או `gemini-flash-latest`).\n' +
+        '• ודא ש-`GEMINI_API_KEY` תקף וב-aistudio.google.com פעיל.\n' +
+        '• בדוק את הלוג בטרמינל ל-stack מלא.\n\n' +
+        'אפשר לדלג עם הכפתור "⏭ דלג והפעל" שהיה בשלב הקודם, או לסגור עם /cancel.',
+      { parse_mode: 'Markdown' }
+    );
   }
 });
 
@@ -196,8 +204,12 @@ newPlaylistWizard.on('text', async (ctx, next) => {
         await ctx.reply('סיימת? לחץ לסיום.', buildPreChatFinishKeyboard());
       }
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
       logger.error({ err }, 'pre-chat reply failed');
-      await ctx.reply('❌ Gemini נתקל בבעיה. אפשר ללחוץ "סיים והמשך".');
+      await ctx.reply(
+        `❌ Gemini שגיאה: \`${message.slice(0, 300)}\`\nאפשר ללחוץ "סיים והמשך" או /cancel.`,
+        { parse_mode: 'Markdown' }
+      );
     }
     return;
   }

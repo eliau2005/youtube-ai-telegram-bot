@@ -93,26 +93,25 @@ export async function consultChat(
   constraints: UserConstraints
 ): Promise<string> {
   const model = getPlainModel();
-  const messages = [
-    {
-      role: 'user' as const,
-      parts: [{ text: buildConsultSystemPrompt(constraints) }]
-    },
-    {
-      role: 'model' as const,
-      parts: [{ text: 'הבנתי. ספר לי על הסדרה הזו במשפט אחד.' }]
-    },
-    ...history.map((m) => ({
-      role: (m.role === 'assistant' ? 'model' : 'user') as 'model' | 'user',
-      parts: [{ text: m.text }]
-    })),
-    {
-      role: 'user' as const,
-      parts: [{ text: userMessage }]
-    }
-  ];
 
-  const result = await model.generateContent({ contents: messages });
+  // Use a single-turn prompt (same shape as categorizeChunk) instead of
+  // multi-turn `contents`, because some preview models don't support the
+  // multi-turn structure cleanly and fail with vague 400 errors.
+  const transcript = history
+    .map((m) => `${m.role === 'assistant' ? 'יועץ' : 'משתמש'}: ${m.text}`)
+    .join('\n');
+
+  const prompt = [
+    buildConsultSystemPrompt(constraints),
+    '',
+    transcript ? `שיחה עד כה:\n${transcript}` : '',
+    `משתמש: ${userMessage}`,
+    'יועץ:'
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+
+  const result = await model.generateContent(prompt);
   return result.response.text().trim();
 }
 
