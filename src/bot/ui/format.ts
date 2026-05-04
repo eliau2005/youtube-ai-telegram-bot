@@ -10,22 +10,26 @@ export function buildSummaryReport(videos: ProcessedVideo[]): string {
     byGroup.get(key)!.push(v);
   }
 
-  const lines: string[] = [];
-  lines.push(`✅ עיבוד הסתיים — ${videos.length} שיעורים`);
-  lines.push('');
-  lines.push('לפי קבוצה:');
-  const groups = Array.from(byGroup.entries()).slice(0, 12);
-  for (const [name, items] of groups) {
-    lines.push(`• ${name}: ${items.length}`);
-  }
-  if (byGroup.size > 12) lines.push(`• ... ועוד ${byGroup.size - 12} קבוצות`);
+  // Sort groups alphabetically (Hebrew locale-aware) and lessons within each
+  // group by their final `order` so the listing matches the slug numbering.
+  const sortedGroups = Array.from(byGroup.entries()).sort((a, b) =>
+    a[0].localeCompare(b[0], 'he')
+  );
 
+  const lines: string[] = [];
+  lines.push(`✅ עיבוד הסתיים — ${videos.length} שיעורים · ${byGroup.size} קבוצות`);
   lines.push('');
-  lines.push('שלוש דוגמאות:');
-  for (const v of videos.slice(0, 3)) {
-    lines.push(`  ${v.order}. ${v.lessonTitle}`);
+
+  for (const [name, items] of sortedGroups) {
+    items.sort((a, b) => a.order - b.order);
+    lines.push(`📂 ${name} — ${items.length} שיעורים`);
+    for (const v of items) {
+      lines.push(`  ${v.order}. ${v.lessonTitle}`);
+    }
+    lines.push('');
   }
-  return lines.join('\n');
+
+  return lines.join('\n').trimEnd();
 }
 
 export function buildHistoryLine(entry: import('../../core/types').HistoryEntry): string {
