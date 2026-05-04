@@ -17,7 +17,11 @@ import { registerHistory } from './commands/history';
 import { registerCancel } from './commands/cancel';
 
 export function buildBot(): Telegraf<BotContext> {
-  const bot = new Telegraf<BotContext>(config.telegramBotToken);
+  // handlerTimeout: Infinity — playlist processing can take minutes (Gemini calls
+  // for 100+ videos). Default is 90s which kills long callback handlers.
+  const bot = new Telegraf<BotContext>(config.telegramBotToken, {
+    handlerTimeout: Number.POSITIVE_INFINITY
+  });
 
   bot.use(errorHandler);
   bot.use(authMiddleware);
