@@ -45,17 +45,7 @@ function getState(ctx: BotContext): NewPlaylistWizardState {
 export const newPlaylistWizard = new Scenes.WizardScene<BotContext>(
   NEW_PLAYLIST_WIZARD_ID,
 
-  async (ctx) => {
-    const state = getState(ctx);
-    state.jobId = longJobId();
-    state.shortJobId = shortJobId();
-    await ctx.reply(
-      'שלח לי קישור או מזהה פלייליסט יוטיוב.\n' +
-        'דוגמה: https://www.youtube.com/playlist?list=PLxxxxxx'
-    );
-    return ctx.wizard.next();
-  },
-
+  // Step 0 — receive playlist URL/ID
   async (ctx) => {
     if (!('text' in (ctx.message ?? {}))) return;
     const text = (ctx.message as { text: string }).text;
@@ -69,6 +59,7 @@ export const newPlaylistWizard = new Scenes.WizardScene<BotContext>(
     return ctx.wizard.next();
   },
 
+  // Step 1 — receive main category
   async (ctx) => {
     if (!('text' in (ctx.message ?? {}))) return;
     getState(ctx).category = (ctx.message as { text: string }).text.trim();
@@ -76,6 +67,7 @@ export const newPlaylistWizard = new Scenes.WizardScene<BotContext>(
     return ctx.wizard.next();
   },
 
+  // Step 2 — receive sub-categories
   async (ctx) => {
     if (!('text' in (ctx.message ?? {}))) return;
     getState(ctx).subCategories = (ctx.message as { text: string }).text.trim();
@@ -85,6 +77,7 @@ export const newPlaylistWizard = new Scenes.WizardScene<BotContext>(
     return ctx.wizard.next();
   },
 
+  // Step 3 — receive lesson groups (or /skip)
   async (ctx) => {
     if (!('text' in (ctx.message ?? {}))) return;
     const text = (ctx.message as { text: string }).text.trim();
@@ -93,6 +86,7 @@ export const newPlaylistWizard = new Scenes.WizardScene<BotContext>(
     return ctx.wizard.next();
   },
 
+  // Step 4 — receive rabbis, then offer pre-chat
   async (ctx) => {
     if (!('text' in (ctx.message ?? {}))) return;
     getState(ctx).rabbis = (ctx.message as { text: string }).text.trim();
@@ -103,11 +97,27 @@ export const newPlaylistWizard = new Scenes.WizardScene<BotContext>(
     return ctx.wizard.next();
   },
 
-  async (ctx) => {
-    /* placeholder — handled by action handlers (pre:start / pre:skip / run:go / etc.) */
+  // Step 5 — placeholder; handled by action handlers (pre:*, run:*) and the
+  // scene-level .on('text') handler below for pre-chat / dialogs / per-item edit.
+  async (_ctx) => {
     return;
   }
 );
+
+// Initial prompt sent when the user enters the wizard.
+// In telegraf 4.x WizardScene does NOT auto-run step 0 on enter, so we send
+// the first prompt here.
+newPlaylistWizard.enter(async (ctx) => {
+  const state = getState(ctx);
+  state.jobId = longJobId();
+  state.shortJobId = shortJobId();
+  await ctx.reply(
+    '🎬 פלייליסט חדש\n\n' +
+      'שלח לי קישור או מזהה פלייליסט יוטיוב.\n' +
+      'דוגמה: https://www.youtube.com/playlist?list=PLxxxxxx\n\n' +
+      'אפשר לבטל בכל שלב עם /cancel.'
+  );
+});
 
 newPlaylistWizard.action('pre:start', async (ctx) => {
   await ctx.answerCbQuery();
@@ -163,8 +173,13 @@ newPlaylistWizard.action('pre:done', async (ctx) => {
   await sendConfirmation(ctx);
 });
 
-newPlaylistWizard.on('text', async (ctx) => {
+// Out-of-band text handler: handles pre-chat replies, OOS/NSC text input,
+// and per-item edit input. CRITICAL: must call next() when none of the
+// branches match, otherwise the wizard step handler never runs and the
+// wizard freezes silently.
+newPlaylistWizard.on('text', async (ctx, next) => {
   const state = getState(ctx);
+
   // Inside pre-chat?
   if (state.preChat) {
     const userText = ctx.message.text;
@@ -186,12 +201,14 @@ newPlaylistWizard.on('text', async (ctx) => {
     }
     return;
   }
+
   // Pending interactive dialog text input?
   const pdr = state.pendingDialogResolution;
   if (pdr) {
     await handleDialogTextInput(ctx, ctx.message.text);
     return;
   }
+
   // Pending per-item edit?
   const pie = state.pendingItemEdit;
   if (pie && pie.index === undefined) {
@@ -228,6 +245,9 @@ newPlaylistWizard.on('text', async (ctx) => {
     }
     return;
   }
+
+  // No out-of-band state matched — let the wizard step handler run.
+  return next();
 });
 
 newPlaylistWizard.action('run:abort', async (ctx) => {
