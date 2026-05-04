@@ -81,13 +81,13 @@ You are a precise Jewish Halacha content categorizer. Your job is to organize a 
 USER-PROVIDED MAIN CATEGORY: "${mainCategory}"
 All videos in this playlist belong to this main category.
 ${customBlock}
-EXISTING TAXONOMY in the CMS (PREFER reusing these — only invent NEW entries when no existing item fits):
+EXISTING TAXONOMY in the CMS — provided as REFERENCE so you can REUSE titles when they truly fit. You have FULL AUTHORITY to invent new sub-categories, lesson groups, and rabbi entries whenever the playlist content warrants it. The existing list below is NOT a constraint — it's a starting point.
 
 EXISTING SUB-CATEGORIES under "${mainCategory}":
-${subCatsUnderMain.length ? subCatsUnderMain.map((s) => `  • ${s}`).join('\n') : '  (none yet — you may need to create new ones)'}
+${subCatsUnderMain.length ? subCatsUnderMain.map((s) => `  • ${s}`).join('\n') : '  (none yet — invent them as needed based on the videos and user instructions)'}
 
 EXISTING LESSON GROUPS:
-${existing.lessonGroups.length ? existing.lessonGroups.map((g) => `  • ${g}`).join('\n') : '  (none)'}
+${existing.lessonGroups.length ? existing.lessonGroups.map((g) => `  • ${g}`).join('\n') : '  (none — feel free to create lesson groups based on the series/topic patterns you see)'}
 
 EXISTING RABBIS:
 ${existing.rabbis.length ? existing.rabbis.map((r) => `  • ${r}`).join('\n') : '  (none — extract rabbi name from titles)'}
@@ -96,12 +96,26 @@ YOUR TASK:
 For EACH of the ${videos.length} videos in the input array, output a single object. Be CONSISTENT across the whole playlist (same speaker → same rabbi name; same series → same lessonGroup).
 
 Decision rules:
-1. subCategory: pick from the existing sub-categories under the main category if any fits. If user instructions describe a different scheme (e.g. "split by chumash"), follow the user instructions and create new sub-categories accordingly.
-2. lessonGroup: optional. Use null when not applicable. Reuse an existing lesson group when it matches; create a new one when needed.
+
+1. subCategory:
+   - If the user's instructions describe a scheme (e.g. "split by chumash"), follow them and create new sub-categories accordingly — do NOT force-fit videos into existing sub-categories that don't match.
+   - Otherwise prefer an existing sub-category under the main category if it fits well.
+   - Invent a new sub-category whenever the content clearly belongs to a different topic.
+
+2. lessonGroup — A logical SERIES grouping within a sub-category (e.g. a Parsha name, a Holiday topic running across multiple lessons, a multi-part shiur, a Sefer/book, a Halachic theme).
+   - YOU ARE STRONGLY ENCOURAGED to CREATE NEW lesson groups whenever you identify a clear series of related lessons in the playlist titles, even if NO existing group matches. Not having an existing group is NOT a reason to skip grouping.
+   - Reuse an existing lesson group only when its title genuinely matches the series.
+   - Use null ONLY for truly standalone lessons that have no series context. If you can identify a meaningful series name, USE IT.
+   - Be consistent: lessons in the same series → same exact lessonGroup string.
+   - Examples of good lesson groups: "פרשת בא", "הלכות ברכות", "חודש אלול", "מסכת ברכות פרק א", "אבלות ביום טוב".
+
 3. rabbi: extract from the video title or pick from the existing rabbis list. If unclear, use the most likely existing rabbi. Be consistent.
+
 4. baseSlug: English kebab-case transliteration of (lessonGroup if exists, else subCategory).
+
 5. simanValue / simanSectionValue: extract per the rules below.
-6. isNewSubCategory / isNewLessonGroup / isNewRabbi: boolean flags — true if the value you chose is NOT in the existing list above.
+
+6. isNewSubCategory / isNewLessonGroup / isNewRabbi: boolean flags — true if the value you chose is NOT in the existing list above. The importer will create new CMS records for these.
 
 ${TITLE_RULES}
 
