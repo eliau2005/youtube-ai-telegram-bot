@@ -99,8 +99,10 @@ export const newPlaylistWizard = new Scenes.WizardScene<BotContext>(
 
   // Step 5 — placeholder; handled by action handlers (pre:*, run:*) and the
   // scene-level .on('text') handler below for pre-chat / dialogs / per-item edit.
-  async (_ctx) => {
-    return;
+  // CRITICAL: must call next() so that global handlers registered on the bot
+  // (cor:*, fld:*, aiq:*) can fire while the user is still in the scene.
+  async (_ctx, next) => {
+    return next();
   }
 );
 
