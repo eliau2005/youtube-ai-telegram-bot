@@ -1,0 +1,11 @@
+services:
+  bot:
+    build: .
+    image: youtube-ai-telegram-bot:latest
+    container_name: youtube-ai-tg-bot
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - DATA_DIR=/app/data
+    volumes:
+      - ./data:/app/data
